@@ -2,13 +2,19 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-Python code: 
+Create env, activate, and install requirements: 
 
 '''bash
-cd..
+python -m virtualenv env --python=python3.13.2
 env\Scripts\activate
-cd .\script-writing-app\
+pip install -r requirements.txt
 '''
+
+Then run python:
+'''bash
+
+'''
+
 
 First, run the development server:
 
