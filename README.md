@@ -12,8 +12,18 @@ pip install -r requirements.txt
 
 Then run python:
 '''bash
-
+python transcribe_recording.py
 '''
+
+CURRENTV ISSUE:
+CUDA not aligning right with version of something
+For now, just use the env in the Github repo
+'''bash
+cd .. 
+env\Scripts\activate
+cd ./script-writing-app
+'''
+
 
 
 First, run the development server:
