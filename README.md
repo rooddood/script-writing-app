@@ -5,9 +5,16 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 Create env, activate, and install requirements: 
 
 '''bash
-python -m virtualenv env --python=python3.13.2
+python -m virtualenv env --python=python3.8.10
 env\Scripts\activate
 pip install -r requirements.txt
+'''
+
+If you just want to acitvate from the script-writing dir:
+'''bash
+cd ..
+env\Scripts\activate
+cd ./script-writing-app
 '''
 
 Then run python:

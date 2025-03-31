@@ -1,22 +1,34 @@
 import os
-from huggingface_hub import login, hf_hub_download  # Updated import
+from huggingface_hub import login, hf_hub_download
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
-# from transformers import pipeline
 from faster_whisper import WhisperModel
 from AudioRecorder import AudioRecorder
-from transformers import AutoTokenizer, AutoModelForCausalLM
-# from diffusers import StableDiffusionPipeline
-from dotenv import load_dotenv  # Import dotenv to load environment variables
+from dotenv import load_dotenv
 import torch
-print("CUDA available:", torch.cuda.is_available())
-print("cuDNN version:", torch.backends.cudnn.version())
-print("CUDA device name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No CUDA device")
 
-# Load environment variables from .env file
-load_dotenv()
-login(token=os.getenv("HUGGINGFACE_TOKEN"))
+# ########## Environment Setup ##########
+def setup_environment():
+    """Load environment variables and check CUDA availability."""
+    load_dotenv()
+    login(token=os.getenv("HUGGINGFACE_TOKEN"))
+    print("CUDA available:", torch.cuda.is_available())
+    print("cuDNN version:", torch.backends.cudnn.version())
+    print("CUDA device name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No CUDA device")
 
+# ########## Model Utilities ##########
 def get_and_save_model_if_not_exists(model_name, save_directory="./models/", revision="main", model_type="causal"):
+    """
+    Load or download a model and save it locally if not already present.
+
+    Args:
+        model_name (str): Name of the model to load.
+        save_directory (str): Directory to save the model.
+        revision (str): Model revision to use.
+        model_type (str): Type of model ('causal' or 'seq2seq').
+
+    Returns:
+        model: Loaded model.
+    """
     model_path = save_directory + model_name
     if not os.path.exists(model_path):
         print(f"Model '{model_name}' not found locally. Attempting to download...")
@@ -45,84 +57,123 @@ def get_and_save_model_if_not_exists(model_name, save_directory="./models/", rev
             raise
     return model
 
+# ########## Audio Transcription ##########
+def transcribe_audio(recording_path, model_size="large-v3"):
+    """
+    Transcribe audio using WhisperModel.
 
+    Args:
+        recording_path (str): Path to the audio file.
+        model_size (str): Size of the Whisper model.
 
-####### Main Code #######
-print("Starting audio recording...")
+    Returns:
+        tuple: Transcription segments and language information.
+    """
+    print("Initializing WhisperModel...")
+    model = WhisperModel(model_size, device="cuda", compute_type="float16")
+    print("Transcribing audio...")
+    segments, info = model.transcribe(recording_path, beam_size=5)
+    print("Transcription completed.")
+    print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+    return segments, info
 
-# Record a 10-second audio segment - commente out for now to use same clip
-# recorder = AudioRecorder(output_filename="./recordings/test.wav")
-# recorder.record(record_seconds=10)
+def format_transcription(segments):
+    """
+    Format transcription segments into a single text string.
 
-print("Audio recording completed.")
+    Args:
+        segments (list): List of transcription segments.
 
-model_size = "large-v3"
-recording = "./recordings/test.wav"
+    Returns:
+        str: Formatted transcription text.
+    """
+    whole_text = ""
+    for segment in segments:
+        print("[%.2fs -> %.2fs] %s" % (segment.start, segment.end, segment.text))
+        whole_text += segment.text + " "
+    return whole_text.strip()
 
-print("Initializing WhisperModel...")
+# ########## LLM Interaction ##########
+def prepare_messages(system_prompt, user_input):
+    """
+    Prepare messages for the LLM.
 
-# Run on GPU with FP16
-model = WhisperModel(model_size, device="cuda", compute_type="float16")
+    Args:
+        system_prompt (str): System prompt for the LLM.
+        user_input (str): User input text.
 
-# or run on GPU with INT8
-# model = WhisperModel(model_size, device="cuda", compute_type="int8_float16")
-# or run on CPU with INT8
-# model = WhisperModel(model_size, device="cpu", compute_type="int8")
+    Returns:
+        list: List of messages for the LLM.
+    """
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input}
+    ]
 
-print("Transcribing audio...")
+def generate_response(model, tokenizer, messages):
+    """
+    Generate a response from the LLM.
 
-segments, info = model.transcribe(recording, beam_size=5)
+    Args:
+        model: Loaded LLM model.
+        tokenizer: Tokenizer for the model.
+        messages (list): Messages to send to the LLM.
 
-print("Transcription completed.")
-print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+    Returns:
+        str: Generated response.
+    """
+    tokenizer.chat_template = (
+        "{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}"
+        "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}"
+        "{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+    )
+    inputs = tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt").to(model.device)
+    print("Contents of 'inputs':", inputs)
+    outputs = model.generate(inputs, max_new_tokens=512)
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-whole_text = ""
-for segment in segments:
-    print("[%.2fs -> %.2fs] %s" % (segment.start, segment.end, segment.text))
-    whole_text += segment.text + " "
+# ########## Main Code ##########
+if __name__ == "__main__":
+    # Setup environment
+    setup_environment()
 
-# Add a clear prompt to the transcribed text
-system_prompt = (
-    "You are an expert assistant. Based on the following transcription, "
-    "please provide a detailed response or summary:\n\n"
-)
-whole_text = whole_text.strip()
+    # Audio recording (commented out for now)
+    # print("Starting audio recording...")
+    # recorder = AudioRecorder(output_filename="./recordings/test.wav")
+    # recorder.record(record_seconds=10)
+    # print("Audio recording completed.")
 
-print("Sending message to LLM...")
-model_list = [
-    {"name": "deepseek-ai/DeepSeek-R1", "type": "causal"},
-    {"name": "google/flan-t5-large", "type": "seq2seq"}
-]
-model_config = model_list[1]  # Select the desired model
-model_name = model_config["name"]
-model_type = model_config["type"]
+    # Transcribe audio
+    recording_path = "./recordings/test.wav"
+    segments, info = transcribe_audio(recording_path)
+    whole_text = format_transcription(segments)
 
-save_directory = "./models/"
-tokenizer = AutoTokenizer.from_pretrained(model_name)  # , trust_remote_code=True
-model = get_and_save_model_if_not_exists(model_name, save_directory, model_type=model_type).cuda()
-messages=[
-    {"role": "system", "content": system_prompt},
-    { 'role': 'user', 'content': whole_text}
-]
+    # Prepare system prompt
+    system_prompt = (
+        "You are an expert assistant. Based on the following transcription, "
+        "please provide a nicely formatted version of the text in script form. "
+        "Please pull out any necessary formatting and scene setting or other instructions to aid in formatting the text. "
+        "Please output the script version of the following input:\n\n"
+    )
 
-tokenizer.chat_template = "{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+    # Load LLM model and tokenizer
+    model_list = [
+        {"name": "deepseek-ai/DeepSeek-R1", "type": "causal"},
+        {"name": "google/flan-t5-large", "type": "seq2seq"}
+    ]
+    model_config = model_list[1]  # Select the desired model
+    model_name = model_config["name"]
+    model_type = model_config["type"]
+    save_directory = "./models/"
 
-# inputs = tokenizer.apply_chat_template(messages, tokenize=False) #add_generation_prompt=True, return_tensors="pt")#.to(model.device)
-# print("Chat Template:")
-# print(tokenizer.decode(inputs[0]))
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = get_and_save_model_if_not_exists(model_name, save_directory, model_type=model_type)
 
-# # tokenizer.eos_token_id is the id of <|EOT|> token
-# outputs = model.generate(inputs, max_new_tokens=512)#, do_sample=False, top_k=50, top_p=0.95, num_return_sequences=1, eos_token_id=tokenizer.eos_token_id)
-# print(tokenizer.decode(outputs[0]))
+    # Generate response
+    messages = prepare_messages(system_prompt, whole_text)
+    response = generate_response(model, tokenizer, messages)
 
-inputs = tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt").to(model.device)
-print("Contents of 'inputs':", inputs)
-print(f"Type of 'inputs': {type(inputs)}")
-print("Shape of inputs before generate:", inputs.shape)  # Access shape directly
-
-outputs = model.generate(inputs, max_new_tokens=512)  # Pass the tensor directly
-
-print("Generated Output:")
-print(tokenizer.decode(outputs[0], skip_special_tokens=True))
-
-print("FIN!")
+    # Output response
+    print("Generated Output:")
+    print(response)
+    print("FIN!")
