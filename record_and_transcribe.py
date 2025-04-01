@@ -137,23 +137,18 @@ if __name__ == "__main__":
     # Setup environment
     setup_environment()
 
-    # Audio recording (commented out for now)
-    # print("Starting audio recording...")
-    # recorder = AudioRecorder(output_filename="./recordings/test.wav")
-    # recorder.record(record_seconds=10)
-    # print("Audio recording completed.")
-
-    # Transcribe audio
-    recording_path = "./recordings/test.wav"
-    segments, info = transcribe_audio(recording_path)
-    whole_text = format_transcription(segments)
-
-    # Prepare system prompt
+# Prepare system prompt
     system_prompt = (
-        "You are an expert assistant. Based on the following transcription, "
-        "please provide a nicely formatted version of the text in script form. "
-        "Please pull out any necessary formatting and scene setting or other instructions to aid in formatting the text. "
-        "Please output the script version of the following input:\n\n"
+        "You are an expert scriptwriter and assistant. Your task is to transform the following transcription into a professionally formatted script. "
+        "Follow standard scriptwriting conventions, ensuring the output includes the following elements:\n"
+        "- **Scene Headings**: Clearly indicate the location and time of day (e.g., INT. LIVING ROOM - DAY).\n"
+        "- **Action Descriptions**: Describe what is happening in the scene in present tense.\n"
+        "- **Character Names**: Clearly identify the speaker before each line of dialogue.\n"
+        "- **Dialogue**: Format spoken lines under the character's name, ensuring clarity and brevity.\n"
+        "- **Parentheticals**: Include brief instructions for how dialogue is delivered (e.g., angrily, softly) if necessary.\n"
+        "- **Transitions**: Add transitions like FADE IN, FADE OUT, or CUT TO where appropriate.\n\n"
+        "Ensure the script is engaging, clear, and adheres to professional standards. Add any missing details, such as character names, scene descriptions, or formatting, to enhance readability and storytelling. "
+        "Here is the transcription to format into a script:\n\n"
     )
 
     # Load LLM model and tokenizer
@@ -166,14 +161,38 @@ if __name__ == "__main__":
     model_type = model_config["type"]
     save_directory = "./models/"
 
+    #initiale tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = get_and_save_model_if_not_exists(model_name, save_directory, model_type=model_type)
 
-    # Generate response
-    messages = prepare_messages(system_prompt, whole_text)
-    response = generate_response(model, tokenizer, messages)
+    # Start Audio recording 
+    record = True
+    use_test_transcription = True
+    if(record and not use_test_transcription): #is we are not using the test transcription later
+        print("Starting audio recording...")
+        recorder = AudioRecorder(output_filename="./recordings/test.wav")
+        recorder.record(record_seconds=30)
+        print("Audio recording completed.")
 
+        # Transcribe audio
+        recording_path = "./recordings/test.wav"
+        segments, info = transcribe_audio(recording_path)
+        whole_text = format_transcription(segments)
+        print("Transcription Text:", whole_text)
+
+        # Generate response
+        print("Generating response...")
+        messages = prepare_messages(system_prompt, whole_text)
+
+    #try things out using a test transcription, 
+    # set to false to gen using input messages
+    if(use_test_transcription):
+        print("Using test transcription for demonstration.")
+        test_transcription = "John: Hey, how are you? Mary: I'm good, thanks! John: Let's go to the park."
+        messages = prepare_messages(system_prompt, test_transcription)
+    
     # Output response
     print("Generated Output:")
+    response = generate_response(model, tokenizer, messages)
     print(response)
     print("FIN!")
