@@ -37,6 +37,12 @@ const DocumentEditor = () => {
   const [deleteCountdown, setDeleteCountdown] = useState(0); // Countdown state
   const deleteTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Ref for timeout
 
+  // Ensure microphone starts off
+  useEffect(() => {
+    setIsRecording(false); // Ensure recording is off initially
+    speechRecognizer.stop(); // Ensure recognizer is not running
+  }, [setIsRecording]);
+
   // Handle clearing the document
   const clearDocument = () => {
     console.log("Clearing document...");
@@ -107,29 +113,23 @@ const DocumentEditor = () => {
         let type = 'action'; // Default type
         let content = text;
 
-        // Debugging: Log detected commands
         console.log(`Processing final text: "${text}"`);
 
         // Basic command detection
         if (text.toLowerCase().startsWith("scene:")) {
           type = 'scene-heading';
           content = text.substring(6).trim();
-          console.log(`Detected command: Scene. Content: "${content}"`);
         } else if (text.toLowerCase().startsWith("character:")) {
           type = 'character';
           content = text.substring(10).trim();
-          console.log(`Detected command: Character. Content: "${content}"`);
         } else if (text.toLowerCase().startsWith("dialogue:")) {
           type = 'dialogue';
           content = text.substring(9).trim();
-          console.log(`Detected command: Dialogue. Content: "${content}"`);
         } else if (text.toLowerCase().startsWith("transition:")) {
           type = 'transition';
           content = text.substring(11).trim();
-          console.log(`Detected command: Transition. Content: "${content}"`);
         }
 
-        // Create the element
         const element: ScriptElement = {
           type: type as any,
           content: content || text,
@@ -137,8 +137,13 @@ const DocumentEditor = () => {
 
         console.log("Adding element to document:", element);
 
-        // Add to document state
-        addElement(element);
+        // Replace the interim element with the finalized element
+        setDocumentContent((prev) => ({
+          ...prev,
+          elements: prev.elements.map((el) =>
+            el.type === 'interim' ? element : el
+          ),
+        }));
 
         // Add to command history if needed
         if (element.type !== 'action' && element.type !== 'dialogue') {
@@ -148,9 +153,28 @@ const DocumentEditor = () => {
         // Clear interim text
         setInterimText(null);
       } else {
-        // For interim results, update the UI immediately
-        console.log(`Interim text: "${text}"`); 
+        // For interim results, update the existing interim element or add a new one
+        console.log(`Interim text: "${text}"`);
         setInterimText(text);
+
+        setDocumentContent((prev) => {
+          const existingInterimIndex = prev.elements.findIndex((el) => el.type === 'interim');
+          if (existingInterimIndex !== -1) {
+            // Update the existing interim element
+            const updatedElements = [...prev.elements];
+            updatedElements[existingInterimIndex] = {
+              ...updatedElements[existingInterimIndex],
+              content: text,
+            };
+            return { ...prev, elements: updatedElements };
+          } else {
+            // Add a new interim element
+            return {
+              ...prev,
+              elements: [...prev.elements, { type: 'interim', content: text }],
+            };
+          }
+        });
       }
     });
 
