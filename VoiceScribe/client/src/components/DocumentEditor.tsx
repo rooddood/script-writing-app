@@ -36,6 +36,7 @@ const DocumentEditor = () => {
   const formatClass = documentFormat === 'script' ? 'script-format' : '';
   const [deleteCountdown, setDeleteCountdown] = useState(0); // Countdown state
   const deleteTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Ref for timeout
+  const lockInIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for the lock-in interval
 
   // Ensure microphone starts off
   useEffect(() => {
@@ -153,27 +154,28 @@ const DocumentEditor = () => {
         // Clear interim text
         setInterimText(null);
       } else {
-        // For interim results, update the existing interim element or add a new one
+        // For interim results, append words dynamically to create a typing effect
         console.log(`Interim text: "${text}"`);
-        setInterimText(text);
+        setInterimText((prev) => {
+          const previousWords = prev ? prev.split(" ") : [];
+          const newWords = text.split(" ");
+          const updatedWords = [...previousWords, ...newWords.slice(previousWords.length)];
+          return updatedWords.join(" ");
+        });
 
         setDocumentContent((prev) => {
-          const existingInterimIndex = prev.elements.findIndex((el) => el.type === 'interim');
-          if (existingInterimIndex !== -1) {
-            // Update the existing interim element
-            const updatedElements = [...prev.elements];
-            updatedElements[existingInterimIndex] = {
-              ...updatedElements[existingInterimIndex],
-              content: text,
-            };
-            return { ...prev, elements: updatedElements };
+          const elements = [...prev.elements];
+          const lastElement = elements[elements.length - 1];
+
+          if (lastElement && lastElement.type === 'interim') {
+            // Update the content of the last interim element
+            lastElement.content = text;
           } else {
             // Add a new interim element
-            return {
-              ...prev,
-              elements: [...prev.elements, { type: 'interim', content: text }],
-            };
+            elements.push({ type: 'interim', content: text });
           }
+
+          return { ...prev, elements };
         });
       }
     });
@@ -192,6 +194,51 @@ const DocumentEditor = () => {
       setInterimText(null);
     };
   }, [addElement, setInterimText, addToCommandHistory]);
+
+  useEffect(() => {
+    if (isRecording) {
+      // Start a timer to append interim text to the last finalized element every second
+      lockInIntervalRef.current = setInterval(() => {
+        setInterimText((prev) => {
+          if (prev) {
+            // Append interim text to the last finalized element
+            setDocumentContent((prevContent) => {
+              const elements = [...prevContent.elements];
+              const lastElement = elements[elements.length - 1];
+
+              if (lastElement && lastElement.type !== 'interim') {
+                // Append to the last finalized element
+                lastElement.content += ` ${prev}`;
+              } else {
+                // Add a new finalized element if none exists
+                elements.push({ type: 'action', content: prev });
+              }
+
+              return { ...prevContent, elements };
+            });
+
+            // Clear interim text to avoid duplication
+            return null;
+          }
+          return prev;
+        });
+      }, 1000); // Append every 1 second
+    } else {
+      // Clear the interval when recording stops
+      if (lockInIntervalRef.current) {
+        clearInterval(lockInIntervalRef.current);
+        lockInIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      // Cleanup the interval on unmount or when recording stops
+      if (lockInIntervalRef.current) {
+        clearInterval(lockInIntervalRef.current);
+        lockInIntervalRef.current = null;
+      }
+    };
+  }, [isRecording, setDocumentContent, setInterimText]);
 
   // Helper to render script elements
   const renderScriptElement = (element: ScriptElement, index: number) => {
@@ -229,14 +276,25 @@ const DocumentEditor = () => {
   }, [isRecording, interimText, setInterimText]);
 
   return (
-    <div className="flex-1 bg-white md:border-r border-neutral-200 flex flex-col relative">
-      {/* Delete Button */}
-      <div className="absolute top-4 right-4">
+    <div className="flex flex-col h-screen bg-white relative">
+      {/* Document Toolbar */}
+      <div className="border-b border-neutral-200 px-4 py-2 flex items-center flex-wrap sticky top-0 bg-white z-10">
+        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Undo"
+          onClick={() => document.execCommand('undo')}>
+          <Undo className="h-4 w-4 text-neutral-400" />
+        </Button>
+        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Redo"
+          onClick={() => document.execCommand('redo')}>
+          <Redo className="h-4 w-4 text-neutral-400" />
+        </Button>
+        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+        
+        {/* Trash Button */}
         <Button
           onMouseDown={handleDeletePress}
           onMouseUp={handleDeleteRelease}
           onMouseLeave={handleDeleteRelease}
-          className="relative w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center"
+          className="relative w-10 h-10 rounded-full bg-gray-500 hover:bg-gray-600 text-white flex items-center justify-center mr-2"
           title="Hold to Clear Document"
         >
           {deleteCountdown > 0 ? (
@@ -247,18 +305,12 @@ const DocumentEditor = () => {
             <span>🗑️</span>
           )}
         </Button>
-      </div>
 
-      {/* Document Toolbar */}
-      <div className="border-b border-neutral-200 px-4 py-2 flex items-center flex-wrap">
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Undo"
-          onClick={() => document.execCommand('undo')}>
-          <Undo className="h-4 w-4 text-neutral-400" />
+        {/* Save Button Placeholder */}
+        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Save">
+          Save
         </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Redo"
-          onClick={() => document.execCommand('redo')}>
-          <Redo className="h-4 w-4 text-neutral-400" />
-        </Button>
+        
         <div className="h-5 w-px bg-neutral-200 mx-2"></div>
         
         {/* Text Formatting */}
@@ -361,8 +413,9 @@ const DocumentEditor = () => {
       {/* Document Content Area */}
       <div 
         ref={contentRef}
-        className="flex-1 overflow-auto p-8 bg-white" 
+        className="flex-1 overflow-auto p-4" 
         id="documentContent"
+        style={{ maxHeight: 'calc(100vh - 150px)' }} // Adjust height to fit everything on one page
       >
         <div 
           ref={editorRef}
