@@ -3,6 +3,7 @@
 # dependencies
 /first_try_app/.next
 /first_try_app/node_modules
+/VoiceScribe/node_modules
 /node_modules
 /.pnp
 .pnp.*
