@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { ScriptElement } from '@shared/schema';
 import BasicSpeech from '@/lib/basicSpeech';
+import './DocumentEditor.css';
 
 // Create a singleton instance of our speech recognition
 const speechRecognizer = new BasicSpeech();
@@ -37,6 +38,7 @@ const DocumentEditor = () => {
   const [deleteCountdown, setDeleteCountdown] = useState(0); // Countdown state
   const deleteTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Ref for timeout
   const lockInIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for the lock-in interval
+  const [fontSize, setFontSize] = useState(12); // Default font size in pt
 
   // Ensure microphone starts off
   useEffect(() => {
@@ -102,6 +104,8 @@ const DocumentEditor = () => {
 
     // Process speech results
     speechRecognizer.setCallback((text, isFinal) => {
+      if (!isRecording) return; // Ensure translation only happens when recording is active
+
       console.log(`SpeechRecognizer callback triggered. Text: "${text}", Final: ${isFinal}`);
 
       if (!text.trim()) {
@@ -193,15 +197,15 @@ const DocumentEditor = () => {
       }
       setInterimText(null);
     };
-  }, [addElement, setInterimText, addToCommandHistory]);
+  }, [addElement, setInterimText, addToCommandHistory, isRecording, setDocumentContent]);
 
   useEffect(() => {
     if (isRecording) {
-      // Start a timer to append interim text to the last finalized element every second
+      // Start a timer to process interim text every 2 seconds
       lockInIntervalRef.current = setInterval(() => {
         setInterimText((prev) => {
           if (prev) {
-            // Append interim text to the last finalized element
+            // Append interim text to the document content
             setDocumentContent((prevContent) => {
               const elements = [...prevContent.elements];
               const lastElement = elements[elements.length - 1];
@@ -222,7 +226,7 @@ const DocumentEditor = () => {
           }
           return prev;
         });
-      }, 1000); // Append every 1 second
+      }, 2000); // Process every 2 seconds
     } else {
       // Clear the interval when recording stops
       if (lockInIntervalRef.current) {
@@ -276,9 +280,9 @@ const DocumentEditor = () => {
   }, [isRecording, interimText, setInterimText]);
 
   return (
-    <div className="flex flex-col h-screen bg-white relative">
-      {/* Document Toolbar */}
-      <div className="border-b border-neutral-200 px-4 py-2 flex items-center flex-wrap sticky top-0 bg-white z-10">
+    <div className="document-editor h-screen flex flex-col overflow-hidden">
+      {/* Header and Toolbar */}
+      <div className="toolbar sticky top-0 bg-white z-10 shadow-sm flex-shrink-0">
         <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Undo"
           onClick={() => document.execCommand('undo')}>
           <Undo className="h-4 w-4 text-neutral-400" />
@@ -330,7 +334,7 @@ const DocumentEditor = () => {
         <div className="h-5 w-px bg-neutral-200 mx-2"></div>
         
         {/* Document Format Selection - Added to this toolbar */}
-        <div className="relative">
+        {/* <div className="relative">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -361,7 +365,7 @@ const DocumentEditor = () => {
               </div>
             </div>
           )}
-        </div>
+        </div> */}
         
         <div className="h-5 w-px bg-neutral-200 mx-2"></div>
         
@@ -408,21 +412,39 @@ const DocumentEditor = () => {
         <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Voice Command Help">
           <HelpCircle className="h-4 w-4 text-neutral-400" />
         </Button>
+
+        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+
+        {/* Font Size Selector */}
+        <label htmlFor="fontSizeSelector" className="mr-2 text-sm text-neutral-500">Font Size:</label>
+        <input
+          id="fontSizeSelector"
+          type="number"
+          min="8"
+          max="36"
+          step="1"
+          value={fontSize}
+          onChange={(e) => setFontSize(Number(e.target.value))}
+          className="p-1 w-16 rounded border border-neutral-300 text-sm"
+          title="Font Size (in pt)"
+        />
       </div>
-      
+
+      {/* Visual Separator */}
+      {/* <div className="separator my-2 border-t border-neutral-300"></div> */}
+
       {/* Document Content Area */}
       <div 
-        ref={contentRef}
-        className="flex-1 overflow-auto p-4" 
-        id="documentContent"
-        style={{ maxHeight: 'calc(100vh - 150px)' }} // Adjust height to fit everything on one page
+        className="content-area flex-1 overflow-y-auto" 
+        ref={contentRef} 
+        style={{ maxHeight: 'calc(100vh - 180px)' }} // Reduced height to fit better
       >
         <div 
           ref={editorRef}
-          className={`max-w-3xl mx-auto font-mono ${formatClass} leading-relaxed`}
+          className={`editor ${formatClass}`}
           contentEditable={true}
           suppressContentEditableWarning={true}
-          style={{ minHeight: '300px', outline: 'none' }}
+          style={{ fontSize: `${fontSize}pt` }} // Apply font size dynamically
           onInput={(e) => {
             // You can capture manual edits here if needed
             // For now, we're just allowing direct editing without syncing to state
@@ -434,33 +456,31 @@ const DocumentEditor = () => {
           
           {/* Show interim transcription while recording */}
           {isRecording && interimText && (
-            <div className="text-gray-600 border-l-2 border-primary pl-2 py-1 my-2 bg-gray-50/50 italic flex items-center" key="interim-text">
-              <div className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse mr-2"></div>
-              <span className="font-normal">{interimText}</span>
+            <div className="interim-text" key="interim-text">
+              <div className="pulse-indicator"></div>
+              <span>{interimText}</span>
               <span className="animate-pulse">...</span>
             </div>
           )}
 
           {/* Empty state message */}
           {documentContent.elements.length === 0 && !interimText && (
-            <div className="text-gray-400 text-center mt-8 p-8 border border-dashed border-gray-200 rounded-lg">
-              <Mic className="h-10 w-10 mx-auto mb-4 text-gray-300" />
-              <p className="font-medium mb-1">Start Speaking or Type Directly</p>
-              <p className="text-sm">Click the microphone button at the bottom of the screen to begin dictating your script, or click anywhere in this area to start typing.</p>
-              <div className="mt-4 flex justify-center">
-                <div className="animate-bounce bg-primary/10 p-2 rounded-full">
-                  <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-                  </svg>
-                </div>
+            <div className="empty-state">
+              <Mic className="icon" />
+              <p className="title">Start Speaking or Type Directly</p>
+              <p className="description">Click the microphone button at the bottom of the screen to begin dictating your script, or click anywhere in this area to start typing.</p>
+              <div className="bounce-indicator">
+                <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                </svg>
               </div>
             </div>
           )}
         </div>
       </div>
-      
+
       {/* Floating Record Button */}
-      <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50">
+      <div className="record-button">
         <Button
           onClick={toggleRecording}
           className={`w-16 h-16 rounded-full shadow-lg flex items-center justify-center ${
@@ -472,13 +492,13 @@ const DocumentEditor = () => {
           <Mic className="h-6 w-6 text-white" />
         </Button>
       </div>
-      
+
       {/* Recording Status Bar - ALWAYS VISIBLE */}
       <div
         id="recordingStatus"
-        className={`${
+        className={`status-bar sticky bottom-0 ${
           isRecording ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
-        } border-t px-4 py-3 transition-colors duration-300 fixed bottom-0 left-0 w-full`}
+        } flex-shrink-0`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center">
