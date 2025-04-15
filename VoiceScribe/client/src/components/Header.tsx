@@ -83,6 +83,34 @@ const Header = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Formatting handlers
+  const handleFormatCommand = (command: string, value?: string) => {
+    const editor = document.querySelector('.editor');
+    if (!editor) return;
+
+    switch (command) {
+      case 'bold':
+        document.execCommand('bold', false);
+        break;
+      case 'italic':
+        document.execCommand('italic', false);
+        break;
+      case 'underline':
+        document.execCommand('underline', false);
+        break;
+      case 'align':
+        if (value) {
+          document.execCommand('justify' + value.charAt(0).toUpperCase() + value.slice(1), false);
+        }
+        break;
+      case 'fontSize':
+        if (value) {
+          document.execCommand('fontSize', false, value);
+        }
+        break;
+    }
+  };
+
   return (
     <header className="bg-white border-b border-neutral-200 shadow-sm px-4 py-2 flex items-center justify-between sticky top-0 z-10">
       <div className="flex items-center space-x-4">
@@ -151,11 +179,11 @@ const Header = () => {
             <div className="flex flex-wrap gap-2">
               {/* Undo/Redo */}
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Undo"
-                onClick={() => document.execCommand('undo')}>
+                onClick={() => document.execCommand('undo', false)}>
                 <Undo className="h-4 w-4 text-neutral-400" />
               </Button>
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Redo"
-                onClick={() => document.execCommand('redo')}>
+                onClick={() => document.execCommand('redo', false)}>
                 <Redo className="h-4 w-4 text-neutral-400" />
               </Button>
               
@@ -163,15 +191,15 @@ const Header = () => {
               
               {/* Text Formatting */}
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Bold"
-                onClick={() => document.execCommand('bold')}>
+                onClick={() => handleFormatCommand('bold')}>
                 <Bold className="h-4 w-4 text-neutral-400" />
               </Button>
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Italic"
-                onClick={() => document.execCommand('italic')}>
+                onClick={() => handleFormatCommand('italic')}>
                 <Italic className="h-4 w-4 text-neutral-400" />
               </Button>
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Underline"
-                onClick={() => document.execCommand('underline')}>
+                onClick={() => handleFormatCommand('underline')}>
                 <Underline className="h-4 w-4 text-neutral-400" />
               </Button>
               
@@ -179,19 +207,19 @@ const Header = () => {
               
               {/* Text Alignment */}
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Left"
-                onClick={() => document.execCommand('justifyLeft')}>
+                onClick={() => handleFormatCommand('align', 'left')}>
                 <AlignLeft className="h-4 w-4 text-neutral-400" />
               </Button>
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Center"
-                onClick={() => document.execCommand('justifyCenter')}>
+                onClick={() => handleFormatCommand('align', 'center')}>
                 <AlignCenter className="h-4 w-4 text-neutral-400" />
               </Button>
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Right"
-                onClick={() => document.execCommand('justifyRight')}>
+                onClick={() => handleFormatCommand('align', 'right')}>
                 <AlignRight className="h-4 w-4 text-neutral-400" />
               </Button>
               <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Justify"
-                onClick={() => document.execCommand('justifyFull')}>
+                onClick={() => handleFormatCommand('align', 'full')}>
                 <AlignJustify className="h-4 w-4 text-neutral-400" />
               </Button>
               
@@ -207,7 +235,11 @@ const Header = () => {
                   max="36"
                   step="1"
                   value={fontSize}
-                  onChange={(e) => setFontSize(Number(e.target.value))}
+                  onChange={(e) => {
+                    const newSize = Number(e.target.value);
+                    setFontSize(newSize);
+                    handleFormatCommand('fontSize', newSize.toString());
+                  }}
                   className="p-1 w-16 rounded border border-neutral-300 text-sm"
                   title="Font Size (in pt)"
                 />

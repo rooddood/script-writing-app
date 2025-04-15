@@ -40,12 +40,56 @@ const DocumentEditor = () => {
   const deleteTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Ref for timeout
   const lockInIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for the lock-in interval
   const [fontSize, setFontSize] = useState(12); // Default font size in pt
+  const [formattingState, setFormattingState] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+    align: 'left'
+  });
 
   // Ensure microphone starts off
   useEffect(() => {
-    setIsRecording(false); // Ensure recording is off initially
-    speechRecognizer.stop(); // Ensure recognizer is not running
-  }, [setIsRecording]);
+    // Set up speech recognition callbacks immediately
+    speechRecognizer.setCallback((text, isFinal) => {
+      if (!isRecording) return;
+      if (!text.trim()) return;
+
+      if (isFinal) {
+        const newElements = [...documentContent.elements];
+        const lastElement = newElements[newElements.length - 1];
+        
+        if (lastElement && lastElement.type === 'action') {
+          lastElement.content += ' ' + text;
+        } else {
+          newElements.push({ type: 'action' as const, content: text });
+        }
+        
+        setDocumentContent({ elements: newElements });
+        setInterimText(null);
+      } else {
+        setInterimText(text);
+      }
+    });
+
+    speechRecognizer.setStateChangeCallback((recording) => {
+      console.log(`SpeechRecognizer state changed: ${recording ? 'Recording' : 'Stopped'}`);
+      setIsRecording(recording);
+    });
+
+    // Initialize speech recognition
+    if (isRecording) {
+      speechRecognizer.start();
+    } else {
+      speechRecognizer.stop();
+    }
+
+    return () => {
+      if (speechRecognizer.isRecording()) {
+        speechRecognizer.stop();
+      }
+      setInterimText(null);
+    };
+  }, [isRecording, setDocumentContent, setInterimText, setIsRecording]);
 
   // Handle clearing the document
   const clearDocument = () => {
@@ -84,98 +128,7 @@ const DocumentEditor = () => {
   const toggleRecording = () => {
     const newState = !isRecording;
     setIsRecording(newState);
-    
-    if (newState) {
-      speechRecognizer.start();
-    } else {
-      speechRecognizer.stop();
-    }
   };
-
-  // Set up basic speech recognition when component mounts
-  useEffect(() => {
-    console.log("Initializing speechRecognizer...");
-
-    // Process speech results
-    speechRecognizer.setCallback((text, isFinal) => {
-      if (!isRecording) return;
-
-      if (!text.trim()) return;
-
-      if (isFinal) {
-        // For final text, add it to the document
-        setDocumentContent((prev) => {
-          const elements = [...prev.elements];
-          const lastElement = elements[elements.length - 1];
-          
-          // If the last element is an action, append to it
-          if (lastElement && lastElement.type === 'action') {
-            lastElement.content += ' ' + text;
-            return { ...prev, elements };
-          }
-          
-          // Otherwise create a new element
-          return {
-            ...prev,
-            elements: [...elements, { type: 'action', content: text }]
-          };
-        });
-        setInterimText(null);
-      } else {
-        // For interim text, update it immediately
-        setInterimText(text);
-      }
-    });
-
-    speechRecognizer.setStateChangeCallback((recording) => {
-      console.log(`SpeechRecognizer state changed: ${recording ? 'Recording' : 'Stopped'}`);
-    });
-
-    return () => {
-      if (speechRecognizer.isRecording()) {
-        speechRecognizer.stop();
-      }
-      setInterimText(null);
-    };
-  }, [isRecording, setDocumentContent, setInterimText]);
-
-  useEffect(() => {
-    if (isRecording) {
-      lockInIntervalRef.current = setInterval(() => {
-        setInterimText((prev) => {
-          if (prev) {
-            setDocumentContent((prevContent) => {
-              const elements = [...prevContent.elements];
-              const lastElement = elements[elements.length - 1];
-
-              if (lastElement && lastElement.type === 'interim') {
-                lastElement.type = 'action';
-              } else {
-                elements.push({ type: 'action', content: prev });
-              }
-
-              return { ...prevContent, elements };
-            });
-
-            return null;
-          }
-          return prev;
-        });
-      }, 2000);
-    } else {
-      if (lockInIntervalRef.current) {
-        clearInterval(lockInIntervalRef.current);
-        lockInIntervalRef.current = null;
-      }
-    }
-
-    return () => {
-      if (lockInIntervalRef.current) {
-        clearInterval(lockInIntervalRef.current);
-        lockInIntervalRef.current = null;
-      }
-    };
-  }, [isRecording, setDocumentContent, setInterimText]);
 
   // Helper to render script elements
   const renderScriptElement = (element: ScriptElement, index: number) => {
@@ -229,6 +182,75 @@ const DocumentEditor = () => {
 
   // Toggle formatting palette
   const [showFormatting, setShowFormatting] = useState(false);
+
+  // Handle formatting commands
+  const handleFormatCommand = (command: string, value?: string) => {
+    if (!editorRef.current) return;
+
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    switch (command) {
+      case 'bold':
+        document.execCommand('bold', false);
+        break;
+      case 'italic':
+        document.execCommand('italic', false);
+        break;
+      case 'underline':
+        document.execCommand('underline', false);
+        break;
+      case 'align':
+        if (value) {
+          document.execCommand('justify' + value.charAt(0).toUpperCase() + value.slice(1), false);
+        }
+        break;
+      case 'fontSize':
+        if (value) {
+          setFontSize(Number(value));
+          if (editorRef.current) {
+            editorRef.current.style.fontSize = `${value}pt`;
+          }
+        }
+        break;
+    }
+  };
+
+  // Handle undo/redo
+  const handleUndo = () => {
+    if (!editorRef.current) return;
+    document.execCommand('undo', false);
+  };
+
+  const handleRedo = () => {
+    if (!editorRef.current) return;
+    document.execCommand('redo', false);
+  };
+
+  // Update formatting state when selection changes
+  useEffect(() => {
+    const updateFormattingState = () => {
+      if (!editorRef.current) return;
+      
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+
+      const range = selection.getRangeAt(0);
+      const parentElement = range.commonAncestorContainer.parentElement;
+      
+      if (parentElement) {
+        setFormattingState({
+          bold: window.getComputedStyle(parentElement).fontWeight === '700',
+          italic: window.getComputedStyle(parentElement).fontStyle === 'italic',
+          underline: window.getComputedStyle(parentElement).textDecoration.includes('underline'),
+          align: window.getComputedStyle(editorRef.current).textAlign
+        });
+      }
+    };
+
+    document.addEventListener('selectionchange', updateFormattingState);
+    return () => document.removeEventListener('selectionchange', updateFormattingState);
+  }, []);
 
   return (
     <div className="document-editor h-screen flex flex-col overflow-hidden">
