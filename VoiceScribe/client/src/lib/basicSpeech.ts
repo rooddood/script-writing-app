@@ -22,8 +22,8 @@ export default class BasicSpeech {
     
     try {
       this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true; // Keep recording
-      this.recognition.interimResults = true; // Show results as they come in
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
       this.recognition.lang = 'en-US';
       
       // Set up the basic event handlers
@@ -39,44 +39,48 @@ export default class BasicSpeech {
   
   // Process speech recognition results
   private handleResult(event: any) {
-    // Safety check
     if (!event.results) return;
     
-    // Process the latest result
+    let finalTranscript = '';
+    let interimTranscript = '';
+    
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const result = event.results[i];
       if (!result || !result[0]) continue;
       
-      const transcript = result[0].transcript.trim();
-      const isFinal = result.isFinal;
+      const transcript = result[0].transcript;
       
-      if (!transcript) continue;
-      
-      console.log(`Speech result [${isFinal ? 'FINAL' : 'interim'}]: "${transcript}"`);
-      
-      // Pass the result to the callback function
-      this.callback(transcript, isFinal);
+      if (result.isFinal) {
+        finalTranscript += transcript;
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+    
+    // Send interim results if available
+    if (interimTranscript) {
+      this.callback(interimTranscript, false);
+    }
+    
+    // Send final results if available
+    if (finalTranscript) {
+      this.callback(finalTranscript, true);
     }
   }
   
   // Handle when speech recognition ends unexpectedly
   private handleEnd() {
-    console.log("Speech recognition ended");
-    
-    // If we're still supposed to be listening, restart it
     if (this.isListening) {
-      console.log("Still listening, restarting...");
-      
+      console.log("Restarting speech recognition...");
       setTimeout(() => {
         try {
           this.recognition.start();
-          console.log("Restarted speech recognition");
         } catch (error) {
           console.error("Failed to restart speech recognition:", error);
           this.isListening = false;
           this.stateChange(false);
         }
-      }, 250); // Short delay to avoid browser issues
+      }, 100);
     }
   }
   
@@ -99,7 +103,6 @@ export default class BasicSpeech {
   // Set the callback function for state changes
   public setStateChangeCallback(callback: (isRecording: boolean) => void) {
     this.stateChange = callback;
-    // Immediately send current state
     callback(this.isListening);
   }
   

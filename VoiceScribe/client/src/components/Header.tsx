@@ -11,7 +11,7 @@ import { useDocument } from '@/context/DocumentContext';
 import { formatOptions, getCommandHintsForFormat } from '@/lib/documentFormats';
 import { 
   Check, Download, ChevronDown, Save, Settings, Mic, 
-  HistoryIcon, Command, Trash2, Clock 
+  HistoryIcon, Command, Trash2, Clock, FileType, Undo, Redo, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
@@ -21,9 +21,13 @@ const Header = () => {
     setDocumentFormat, 
     saveDocument, 
     commandHistory,
-    clearCommandHistory
+    clearCommandHistory,
+    documentContent
   } = useDocument();
   const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [fontSize, setFontSize] = useState(12);
+  const [deleteCountdown, setDeleteCountdown] = useState(0);
   
   const commandHints = getCommandHintsForFormat(documentFormat);
   
@@ -34,6 +38,41 @@ const Header = () => {
 
   const handleSave = async () => {
     await saveDocument();
+  };
+
+  const handleDeletePress = () => {
+    setDeleteCountdown(5);
+    const timer = setInterval(() => {
+      setDeleteCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleDeleteRelease = () => {
+    if (deleteCountdown === 0) {
+      // Handle clear document
+    }
+  };
+
+  const handleExport = () => {
+    const content = documentContent.elements
+      .map((element: { content: string }) => element.content)
+      .join('\n');
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'script.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -71,6 +110,104 @@ const Header = () => {
       </div>
       
       <div className="flex items-center space-x-3">
+        {/* Trash Button */}
+        <Button
+          onMouseDown={handleDeletePress}
+          onMouseUp={handleDeleteRelease}
+          onMouseLeave={handleDeleteRelease}
+          className="relative w-10 h-10 rounded-full bg-gray-500 hover:bg-gray-600 text-white flex items-center justify-center"
+          title="Hold to Clear Document"
+        >
+          {deleteCountdown > 0 ? (
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
+              {deleteCountdown}
+            </span>
+          ) : (
+            <span>🗑️</span>
+          )}
+        </Button>
+
+        {/* Formatting Toggle Button */}
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          title="Formatting"
+          onClick={() => setShowFormatting(!showFormatting)}
+        >
+          <FileType className="h-5 w-5" />
+        </Button>
+
+        {/* Formatting Palette */}
+        {showFormatting && (
+          <div className="absolute top-full right-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-md z-10 p-2">
+            <div className="flex flex-wrap gap-2">
+              {/* Undo/Redo */}
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Undo"
+                onClick={() => document.execCommand('undo')}>
+                <Undo className="h-4 w-4 text-neutral-400" />
+              </Button>
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Redo"
+                onClick={() => document.execCommand('redo')}>
+                <Redo className="h-4 w-4 text-neutral-400" />
+              </Button>
+              
+              <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+              
+              {/* Text Formatting */}
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Bold"
+                onClick={() => document.execCommand('bold')}>
+                <Bold className="h-4 w-4 text-neutral-400" />
+              </Button>
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Italic"
+                onClick={() => document.execCommand('italic')}>
+                <Italic className="h-4 w-4 text-neutral-400" />
+              </Button>
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Underline"
+                onClick={() => document.execCommand('underline')}>
+                <Underline className="h-4 w-4 text-neutral-400" />
+              </Button>
+              
+              <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+              
+              {/* Text Alignment */}
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Left"
+                onClick={() => document.execCommand('justifyLeft')}>
+                <AlignLeft className="h-4 w-4 text-neutral-400" />
+              </Button>
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Center"
+                onClick={() => document.execCommand('justifyCenter')}>
+                <AlignCenter className="h-4 w-4 text-neutral-400" />
+              </Button>
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Right"
+                onClick={() => document.execCommand('justifyRight')}>
+                <AlignRight className="h-4 w-4 text-neutral-400" />
+              </Button>
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Justify"
+                onClick={() => document.execCommand('justifyFull')}>
+                <AlignJustify className="h-4 w-4 text-neutral-400" />
+              </Button>
+              
+              <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+              
+              {/* Font Size */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="fontSizeSelector" className="text-sm text-neutral-500">Font Size:</label>
+                <input
+                  id="fontSizeSelector"
+                  type="number"
+                  min="8"
+                  max="36"
+                  step="1"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value))}
+                  className="p-1 w-16 rounded border border-neutral-300 text-sm"
+                  title="Font Size (in pt)"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Command History Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -152,7 +289,7 @@ const Header = () => {
         <Button variant="ghost" size="icon" onClick={handleSave} title="Save Document">
           <Save className="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" title="Export Document">
+        <Button variant="ghost" size="icon" title="Export Document" onClick={handleExport}>
           <Download className="h-5 w-5" />
         </Button>
         <Button variant="ghost" size="icon" title="Settings">

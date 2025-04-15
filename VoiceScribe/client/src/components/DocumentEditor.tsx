@@ -5,9 +5,9 @@ import { useDocument } from '@/context/DocumentContext';
 import { 
   Undo, Redo, Bold, Italic, Underline, HelpCircle, Mic, FileType,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Heading1, Heading2, List, ListOrdered
+  Heading1, Heading2, List, ListOrdered, FileText
 } from 'lucide-react';
-import { ScriptElement } from '@shared/schema';
+import { ScriptElement, DocumentContent } from '@shared/schema';
 import BasicSpeech from '@/lib/basicSpeech';
 import './DocumentEditor.css';
 
@@ -26,7 +26,8 @@ const DocumentEditor = () => {
     setDocumentContent, 
     updateElement, 
     removeElement,
-    addToCommandHistory
+    addToCommandHistory,
+    setDocumentFormat
   } = useDocument();
   
   const contentRef = useRef<HTMLDivElement>(null);
@@ -81,154 +82,87 @@ const DocumentEditor = () => {
 
   // Toggle recording state
   const toggleRecording = () => {
-    console.log("Toggle recording called");
-
-    // Toggle the recording state only on button click
-    setIsRecording((prev) => {
-      const newState = !prev;
-      if (newState) {
-        speechRecognizer.start(); // Start recording
-        console.log("Microphone turned ON");
-      } else {
-        speechRecognizer.stop(); // Stop recording
-        console.log("Microphone turned OFF");
-      }
-      return newState;
-    });
+    const newState = !isRecording;
+    setIsRecording(newState);
+    
+    if (newState) {
+      speechRecognizer.start();
+    } else {
+      speechRecognizer.stop();
+    }
   };
 
   // Set up basic speech recognition when component mounts
   useEffect(() => {
-    // Debugging: Ensure speechRecognizer is initialized
     console.log("Initializing speechRecognizer...");
 
     // Process speech results
     speechRecognizer.setCallback((text, isFinal) => {
-      if (!isRecording) return; // Ensure translation only happens when recording is active
+      if (!isRecording) return;
 
-      console.log(`SpeechRecognizer callback triggered. Text: "${text}", Final: ${isFinal}`);
-
-      if (!text.trim()) {
-        console.warn("SpeechRecognizer returned empty or whitespace text. Skipping...");
-        return; // Skip empty results
-      }
+      if (!text.trim()) return;
 
       if (isFinal) {
-        // Process final speech results
-        let type = 'action'; // Default type
-        let content = text;
-
-        console.log(`Processing final text: "${text}"`);
-
-        // Basic command detection
-        if (text.toLowerCase().startsWith("scene:")) {
-          type = 'scene-heading';
-          content = text.substring(6).trim();
-        } else if (text.toLowerCase().startsWith("character:")) {
-          type = 'character';
-          content = text.substring(10).trim();
-        } else if (text.toLowerCase().startsWith("dialogue:")) {
-          type = 'dialogue';
-          content = text.substring(9).trim();
-        } else if (text.toLowerCase().startsWith("transition:")) {
-          type = 'transition';
-          content = text.substring(11).trim();
-        }
-
-        const element: ScriptElement = {
-          type: type as any,
-          content: content || text,
-        };
-
-        console.log("Adding element to document:", element);
-
-        // Replace the interim element with the finalized element
-        setDocumentContent((prev) => ({
-          ...prev,
-          elements: prev.elements.map((el) =>
-            el.type === 'interim' ? element : el
-          ),
-        }));
-
-        // Add to command history if needed
-        if (element.type !== 'action' && element.type !== 'dialogue') {
-          addToCommandHistory(element.type, element.content);
-        }
-
-        // Clear interim text
-        setInterimText(null);
-      } else {
-        // For interim results, append words dynamically to create a typing effect
-        console.log(`Interim text: "${text}"`);
-        setInterimText((prev) => {
-          const previousWords = prev ? prev.split(" ") : [];
-          const newWords = text.split(" ");
-          const updatedWords = [...previousWords, ...newWords.slice(previousWords.length)];
-          return updatedWords.join(" ");
-        });
-
+        // For final text, add it to the document
         setDocumentContent((prev) => {
           const elements = [...prev.elements];
           const lastElement = elements[elements.length - 1];
-
-          if (lastElement && lastElement.type === 'interim') {
-            // Update the content of the last interim element
-            lastElement.content = text;
-          } else {
-            // Add a new interim element
-            elements.push({ type: 'interim', content: text });
+          
+          // If the last element is an action, append to it
+          if (lastElement && lastElement.type === 'action') {
+            lastElement.content += ' ' + text;
+            return { ...prev, elements };
           }
-
-          return { ...prev, elements };
+          
+          // Otherwise create a new element
+          return {
+            ...prev,
+            elements: [...elements, { type: 'action', content: text }]
+          };
         });
+        setInterimText(null);
+      } else {
+        // For interim text, update it immediately
+        setInterimText(text);
       }
     });
 
-    // Debugging: Log state changes in speechRecognizer
     speechRecognizer.setStateChangeCallback((recording) => {
       console.log(`SpeechRecognizer state changed: ${recording ? 'Recording' : 'Stopped'}`);
     });
 
-    // Cleanup on unmount
     return () => {
       if (speechRecognizer.isRecording()) {
-        console.log("Stopping speechRecognizer on unmount...");
         speechRecognizer.stop();
       }
       setInterimText(null);
     };
-  }, [addElement, setInterimText, addToCommandHistory, isRecording, setDocumentContent]);
+  }, [isRecording, setDocumentContent, setInterimText]);
 
   useEffect(() => {
     if (isRecording) {
-      // Start a timer to process interim text every 2 seconds
       lockInIntervalRef.current = setInterval(() => {
         setInterimText((prev) => {
           if (prev) {
-            // Append interim text to the document content
             setDocumentContent((prevContent) => {
               const elements = [...prevContent.elements];
               const lastElement = elements[elements.length - 1];
 
-              if (lastElement && lastElement.type !== 'interim') {
-                // Append to the last finalized element
-                lastElement.content += ` ${prev}`;
+              if (lastElement && lastElement.type === 'interim') {
+                lastElement.type = 'action';
               } else {
-                // Add a new finalized element if none exists
                 elements.push({ type: 'action', content: prev });
               }
 
               return { ...prevContent, elements };
             });
 
-            // Clear interim text to avoid duplication
             return null;
           }
           return prev;
         });
-      }, 2000); // Process every 2 seconds
+      }, 2000);
     } else {
-      // Clear the interval when recording stops
       if (lockInIntervalRef.current) {
         clearInterval(lockInIntervalRef.current);
         lockInIntervalRef.current = null;
@@ -236,7 +170,6 @@ const DocumentEditor = () => {
     }
 
     return () => {
-      // Cleanup the interval on unmount or when recording stops
       if (lockInIntervalRef.current) {
         clearInterval(lockInIntervalRef.current);
         lockInIntervalRef.current = null;
@@ -246,22 +179,20 @@ const DocumentEditor = () => {
 
   // Helper to render script elements
   const renderScriptElement = (element: ScriptElement, index: number) => {
-    switch (element.type) {
-      case 'scene-heading':
-        return <div key={index} className="scene-heading">{element.content}</div>;
-      case 'action':
-        return <div key={index} className="action">{element.content}</div>;
-      case 'character':
-        return <div key={index} className="character">{element.content}</div>;
-      case 'parenthetical':
-        return <div key={index} className="parenthetical">{element.content}</div>;
-      case 'dialogue':
-        return <div key={index} className="dialogue">{element.content}</div>;
-      case 'transition':
-        return <div key={index} className="transition">{element.content}</div>;
-      default:
-        return <div key={index}>{element.content}</div>;
-    }
+    return (
+      <span 
+        key={index} 
+        className={`action ${element.type === 'action' ? 'typing' : ''}`}
+        style={{ 
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+          display: 'inline'
+        }}
+      >
+        {element.content}
+      </span>
+    );
   };
 
   // Scroll to bottom when content changes
@@ -279,188 +210,49 @@ const DocumentEditor = () => {
     }
   }, [isRecording, interimText, setInterimText]);
 
+  // Handle export to PDF
+  const handleExport = () => {
+    const content = documentContent.elements
+      .map(element => element.content)
+      .join('\n');
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'script.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Toggle formatting palette
+  const [showFormatting, setShowFormatting] = useState(false);
+
   return (
     <div className="document-editor h-screen flex flex-col overflow-hidden">
-      {/* Header and Toolbar */}
-      <div className="toolbar sticky top-0 bg-white z-10 shadow-sm flex-shrink-0">
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Undo"
-          onClick={() => document.execCommand('undo')}>
-          <Undo className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Redo"
-          onClick={() => document.execCommand('redo')}>
-          <Redo className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
-        
-        {/* Trash Button */}
-        <Button
-          onMouseDown={handleDeletePress}
-          onMouseUp={handleDeleteRelease}
-          onMouseLeave={handleDeleteRelease}
-          className="relative w-10 h-10 rounded-full bg-gray-500 hover:bg-gray-600 text-white flex items-center justify-center mr-2"
-          title="Hold to Clear Document"
-        >
-          {deleteCountdown > 0 ? (
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
-              {deleteCountdown}
-            </span>
-          ) : (
-            <span>🗑️</span>
-          )}
-        </Button>
-
-        {/* Save Button Placeholder */}
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Save">
-          Save
-        </Button>
-        
-        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
-        
-        {/* Text Formatting */}
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Bold"
-          onClick={() => document.execCommand('bold')}>
-          <Bold className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Italic"
-          onClick={() => document.execCommand('italic')}>
-          <Italic className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Underline"
-          onClick={() => document.execCommand('underline')}>
-          <Underline className="h-4 w-4 text-neutral-400" />
-        </Button>
-        
-        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
-        
-        {/* Document Format Selection - Added to this toolbar */}
-        {/* <div className="relative">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="p-1.5 rounded hover:bg-neutral-100 mr-1 flex items-center" 
-            title="Document Format"
-            onClick={() => setShowFormats(!showFormats)}
-          >
-            <FileType className="h-4 w-4 text-neutral-400 mr-1" />
-            <span className="text-xs text-neutral-500">{documentFormat}</span>
-          </Button>
-          
-          {showFormats && (
-            <div className="absolute top-full left-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-md z-10 min-w-[120px]">
-              <div 
-                className="px-3 py-2 text-sm hover:bg-neutral-100 cursor-pointer" 
-                onClick={() => {
-                  setShowFormats(false);
-                  // Handle format change if needed
-                }}
-              >
-                Script
-              </div>
-              <div className="px-3 py-2 text-sm text-neutral-400 cursor-not-allowed">
-                Novel (Coming Soon)
-              </div>
-              <div className="px-3 py-2 text-sm text-neutral-400 cursor-not-allowed">
-                Poem (Coming Soon)
-              </div>
-            </div>
-          )}
-        </div> */}
-        
-        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
-        
-        {/* Text Alignment */}
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Align Left"
-          onClick={() => document.execCommand('justifyLeft')}>
-          <AlignLeft className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Align Center"
-          onClick={() => document.execCommand('justifyCenter')}>
-          <AlignCenter className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Align Right"
-          onClick={() => document.execCommand('justifyRight')}>
-          <AlignRight className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Justify"
-          onClick={() => document.execCommand('justifyFull')}>
-          <AlignJustify className="h-4 w-4 text-neutral-400" />
-        </Button>
-        
-        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
-        
-        {/* Headings and Lists */}
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Heading 1"
-          onClick={() => document.execCommand('formatBlock', false, '<h1>')}>
-          <Heading1 className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Heading 2"
-          onClick={() => document.execCommand('formatBlock', false, '<h2>')}>
-          <Heading2 className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Bullet List"
-          onClick={() => document.execCommand('insertUnorderedList')}>
-          <List className="h-4 w-4 text-neutral-400" />
-        </Button>
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Numbered List"
-          onClick={() => document.execCommand('insertOrderedList')}>
-          <ListOrdered className="h-4 w-4 text-neutral-400" />
-        </Button>
-        
-        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
-        
-        <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100 mr-1" title="Voice Command Help">
-          <HelpCircle className="h-4 w-4 text-neutral-400" />
-        </Button>
-
-        <div className="h-5 w-px bg-neutral-200 mx-2"></div>
-
-        {/* Font Size Selector */}
-        <label htmlFor="fontSizeSelector" className="mr-2 text-sm text-neutral-500">Font Size:</label>
-        <input
-          id="fontSizeSelector"
-          type="number"
-          min="8"
-          max="36"
-          step="1"
-          value={fontSize}
-          onChange={(e) => setFontSize(Number(e.target.value))}
-          className="p-1 w-16 rounded border border-neutral-300 text-sm"
-          title="Font Size (in pt)"
-        />
-      </div>
-
-      {/* Visual Separator */}
-      {/* <div className="separator my-2 border-t border-neutral-300"></div> */}
-
       {/* Document Content Area */}
       <div 
         className="content-area flex-1 overflow-y-auto" 
         ref={contentRef} 
-        style={{ maxHeight: 'calc(100vh - 180px)' }} // Reduced height to fit better
+        style={{ maxHeight: 'calc(100vh - 180px)' }}
       >
         <div 
           ref={editorRef}
           className={`editor ${formatClass}`}
           contentEditable={true}
           suppressContentEditableWarning={true}
-          style={{ fontSize: `${fontSize}pt` }} // Apply font size dynamically
-          onInput={(e) => {
-            // You can capture manual edits here if needed
-            // For now, we're just allowing direct editing without syncing to state
-            // This gives users the flexibility to manually edit
-            console.log("Manual edit detected");
-          }}
+          style={{ fontSize: `${fontSize}pt` }}
         >
           {documentContent.elements.map(renderScriptElement)}
           
           {/* Show interim transcription while recording */}
           {isRecording && interimText && (
-            <div className="interim-text" key="interim-text">
-              <div className="pulse-indicator"></div>
-              <span>{interimText}</span>
-              <span className="animate-pulse">...</span>
-            </div>
+            <span className="interim-text">
+              <span className="pulse-indicator"></span>
+              {interimText}
+            </span>
           )}
 
           {/* Empty state message */}
@@ -493,12 +285,12 @@ const DocumentEditor = () => {
         </Button>
       </div>
 
-      {/* Recording Status Bar - ALWAYS VISIBLE */}
+      {/* Recording Status Bar */}
       <div
         id="recordingStatus"
-        className={`status-bar sticky bottom-0 ${
+        className={`status-bar fixed bottom-0 left-0 right-0 ${
           isRecording ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
-        } flex-shrink-0`}
+        } flex-shrink-0 border-t p-2`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center">

@@ -19,9 +19,12 @@ html, body {
   padding: 0.5rem 1rem;
   background-color: var(--background);
   z-index: 10;
-  position: fixed; /* Make the toolbar fixed at the top */
+  position: fixed;
   top: 0;
-  width: 100%; /* Ensure it spans the full width */
+  width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .content-area {
@@ -38,17 +41,46 @@ html, body {
   line-height: 1.6;
   min-height: 300px;
   outline: none;
+  padding: 1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.action {
+  display: inline;
+  margin-right: 0.5rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.action.typing {
+  animation: typing 0.2s ease-in-out;
+}
+
+@keyframes typing {
+  from {
+    opacity: 0.5;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .interim-text {
   color: var(--foreground-muted);
   border-left: 2px solid var(--primary);
   padding-left: 0.5rem;
-  margin: 0.5rem 0;
+  margin-left: 0.5rem;
   background-color: var(--background-muted);
   font-style: italic;
-  display: flex;
-  align-items: center;
+  display: inline;
+  opacity: 0.8;
+  transition: opacity 0.2s ease-in-out;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .pulse-indicator {
@@ -58,6 +90,8 @@ html, body {
   border-radius: 50%;
   margin-right: 0.5rem;
   animation: pulse 1s infinite;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .empty-state {
@@ -111,12 +145,30 @@ html, body {
   margin-bottom: 0; /* Ensure no extra space below the footer */
 }
 
+.formatting-palette {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: white;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 200px;
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
+    transform: scale(1);
   }
   50% {
     opacity: 0.5;
+    transform: scale(1.2);
   }
 }
 
