@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,12 +22,14 @@ const Header = () => {
     saveDocument, 
     commandHistory,
     clearCommandHistory,
-    documentContent
+    documentContent,
+    setDocumentContent
   } = useDocument();
   const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
   const [fontSize, setFontSize] = useState(12);
   const [deleteCountdown, setDeleteCountdown] = useState(0);
+  const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const commandHints = getCommandHintsForFormat(documentFormat);
   
@@ -41,11 +43,15 @@ const Header = () => {
   };
 
   const handleDeletePress = () => {
-    setDeleteCountdown(5);
-    const timer = setInterval(() => {
+    setDeleteCountdown(3);
+    deleteTimerRef.current = setInterval(() => {
       setDeleteCountdown(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
+          if (deleteTimerRef.current) {
+            clearInterval(deleteTimerRef.current);
+            deleteTimerRef.current = null;
+          }
+          setDocumentContent({ elements: [] }); // Clear the document
           return 0;
         }
         return prev - 1;
@@ -54,9 +60,11 @@ const Header = () => {
   };
 
   const handleDeleteRelease = () => {
-    if (deleteCountdown === 0) {
-      // Handle clear document
+    if (deleteTimerRef.current) {
+      clearInterval(deleteTimerRef.current);
+      deleteTimerRef.current = null;
     }
+    setDeleteCountdown(0); // Reset countdown when released
   };
 
   const handleExport = () => {
