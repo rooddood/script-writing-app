@@ -151,17 +151,17 @@ const Header = () => {
           onMouseDown={handleDeletePress}
           onMouseUp={handleDeleteRelease}
           onMouseLeave={handleDeleteRelease}
-          className={`relative w-10 h-10 rounded-full flex items-center justify-center ${
-            deleteCountdown > 0 ? 'bg-gray-500 text-white' : 'bg-white text-gray-500 hover:text-gray-600'
+          className={`relative w-10 h-10 rounded flex items-center justify-center hover:bg-neutral-100 ${
+            deleteCountdown > 0 ? 'bg-gray-500 text-white' : 'bg-white text-neutral-400'
           }`}
           title="Hold to Clear Document"
         >
           {deleteCountdown > 0 ? (
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black">
               {deleteCountdown}
             </span>
           ) : (
-            <span>🗑️</span>
+            <Trash2 className="h-5 w-5" />
           )}
         </Button>
 
