@@ -151,7 +151,9 @@ const Header = () => {
           onMouseDown={handleDeletePress}
           onMouseUp={handleDeleteRelease}
           onMouseLeave={handleDeleteRelease}
-          className="relative w-10 h-10 rounded-full bg-gray-500 hover:bg-gray-600 text-white flex items-center justify-center"
+          className={`relative w-10 h-10 rounded-full flex items-center justify-center ${
+            deleteCountdown > 0 ? 'bg-gray-500 text-white' : 'bg-white text-gray-500 hover:text-gray-600'
+          }`}
           title="Hold to Clear Document"
         >
           {deleteCountdown > 0 ? (
