@@ -8,6 +8,15 @@
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased bg-neutral-900 text-neutral-100; /* Dark theme */
+  }
+
+  .editor {
+    background-color: #f5f0e1; /* Light brown for writing page */
+    color: #3e2723; /* Dark brown text for scripture-like appearance */
+    font-family: 'Georgia', serif; /* Classic font for scripture feel */
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 }

@@ -10,7 +10,7 @@ import {
 import { useDocument } from '@/context/DocumentContext';
 import { formatOptions, getCommandHintsForFormat } from '@/lib/documentFormats';
 import { 
-  Check, Download, ChevronDown, Save, Settings, Mic, 
+  Check, Download, ChevronDown, Save, Mic, 
   HistoryIcon, Command, Trash2, Clock, FileType, Undo, Redo, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -112,37 +112,12 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white border-b border-neutral-200 shadow-sm px-4 py-2 flex items-center justify-between sticky top-0 z-10">
+    <header className="bg-neutral-900 border-b border-neutral-700 shadow-sm px-4 py-2 flex items-center justify-between sticky top-0 z-10 text-white">
       <div className="flex items-center space-x-4">
         <div className="flex items-center">
-          <Mic className="text-primary text-2xl" />
-          <h1 className="text-xl font-medium text-neutral-400 ml-1">VoiceScribe</h1>
+          <img src="/favicon.ico" alt="VoiceScribe Logo" className="h-6 w-6" /> {/* Use public folder favicon */}
+          <h1 className="text-xl font-medium text-neutral-300 ml-1">VoiceScribe</h1>
         </div>
-        
-        {/* Document Format Selector */}
-        <DropdownMenu open={isFormatDropdownOpen} onOpenChange={setIsFormatDropdownOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center px-3 py-1.5 text-sm bg-white border border-neutral-200 rounded-md hover:bg-neutral-100">
-              {formatOptions.find(f => f.value === documentFormat)?.label || 'Script Format'}
-              <ChevronDown className="h-4 w-4 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {formatOptions.map((format) => (
-              <DropdownMenuItem 
-                key={format.value}
-                onClick={() => handleFormatChange(format.value)}
-                className="flex items-center px-3 py-2 text-sm cursor-pointer"
-              >
-                {format.value === documentFormat && (
-                  <Check className="h-4 w-4 text-primary mr-2" />
-                )}
-                {format.value !== documentFormat && <span className="w-6" />}
-                {format.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
       
       <div className="flex items-center space-x-3">
@@ -151,13 +126,13 @@ const Header = () => {
           onMouseDown={handleDeletePress}
           onMouseUp={handleDeleteRelease}
           onMouseLeave={handleDeleteRelease}
-          className={`relative w-10 h-10 rounded flex items-center justify-center hover:bg-neutral-100 ${
-            deleteCountdown > 0 ? 'bg-gray-500 text-white' : 'bg-white text-neutral-400'
+          className={`relative w-10 h-10 rounded flex items-center justify-center ${
+            deleteCountdown > 0 ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-700'
           }`}
           title="Hold to Clear Document"
         >
           {deleteCountdown > 0 ? (
-            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black">
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
               {deleteCountdown}
             </span>
           ) : (
@@ -177,59 +152,86 @@ const Header = () => {
 
         {/* Formatting Palette */}
         {showFormatting && (
-          <div className="absolute top-full right-0 mt-1 bg-white border border-neutral-200 rounded-md shadow-md z-10 p-2">
+          <div className="absolute top-full right-0 mt-1 bg-neutral-800 border border-neutral-700 rounded-md shadow-md z-10 p-2">
             <div className="flex flex-wrap gap-2">
+              {/* Document Format Dropdown */}
+              <DropdownMenu open={isFormatDropdownOpen} onOpenChange={setIsFormatDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex items-center px-2 py-1 text-xs bg-white border border-neutral-200 rounded-md hover:bg-neutral-100 text-black">
+                    {formatOptions.find(f => f.value === documentFormat)?.label || 'Format'}
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-40 text-black">
+                  {formatOptions.map((format) => (
+                    <DropdownMenuItem 
+                      key={format.value}
+                      onClick={() => handleFormatChange(format.value)}
+                      className="flex items-center px-2 py-1 text-xs cursor-pointer"
+                    >
+                      {format.value === documentFormat && (
+                        <Check className="h-3 w-3 text-primary mr-2" />
+                      )}
+                      {format.value !== documentFormat && <span className="w-4" />}
+                      {format.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="h-5 w-px bg-neutral-600 mx-2"></div>
+
               {/* Undo/Redo */}
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Undo"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Undo"
                 onClick={() => document.execCommand('undo', false)}>
                 <Undo className="h-4 w-4 text-neutral-400" />
               </Button>
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Redo"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Redo"
                 onClick={() => document.execCommand('redo', false)}>
                 <Redo className="h-4 w-4 text-neutral-400" />
               </Button>
               
-              <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+              <div className="h-5 w-px bg-neutral-600 mx-2"></div>
               
               {/* Text Formatting */}
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Bold"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Bold"
                 onClick={() => handleFormatCommand('bold')}>
                 <Bold className="h-4 w-4 text-neutral-400" />
               </Button>
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Italic"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Italic"
                 onClick={() => handleFormatCommand('italic')}>
                 <Italic className="h-4 w-4 text-neutral-400" />
               </Button>
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Underline"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Underline"
                 onClick={() => handleFormatCommand('underline')}>
                 <Underline className="h-4 w-4 text-neutral-400" />
               </Button>
               
-              <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+              <div className="h-5 w-px bg-neutral-600 mx-2"></div>
               
               {/* Text Alignment */}
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Left"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Align Left"
                 onClick={() => handleFormatCommand('align', 'left')}>
                 <AlignLeft className="h-4 w-4 text-neutral-400" />
               </Button>
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Center"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Align Center"
                 onClick={() => handleFormatCommand('align', 'center')}>
                 <AlignCenter className="h-4 w-4 text-neutral-400" />
               </Button>
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Align Right"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Align Right"
                 onClick={() => handleFormatCommand('align', 'right')}>
                 <AlignRight className="h-4 w-4 text-neutral-400" />
               </Button>
-              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-100" title="Justify"
+              <Button variant="ghost" size="sm" className="p-1.5 rounded hover:bg-neutral-700" title="Justify"
                 onClick={() => handleFormatCommand('align', 'full')}>
                 <AlignJustify className="h-4 w-4 text-neutral-400" />
               </Button>
               
-              <div className="h-5 w-px bg-neutral-200 mx-2"></div>
+              <div className="h-5 w-px bg-neutral-600 mx-2"></div>
               
               {/* Font Size */}
               <div className="flex items-center gap-2">
-                <label htmlFor="fontSizeSelector" className="text-sm text-neutral-500">Font Size:</label>
+                <label htmlFor="fontSizeSelector" className="text-sm text-neutral-400">Font Size:</label>
                 <input
                   id="fontSizeSelector"
                   type="number"
@@ -242,7 +244,7 @@ const Header = () => {
                     setFontSize(newSize);
                     handleFormatCommand('fontSize', newSize.toString());
                   }}
-                  className="p-1 w-16 rounded border border-neutral-300 text-sm"
+                  className="p-1 w-16 rounded border border-neutral-600 text-sm bg-neutral-900 text-neutral-100"
                   title="Font Size (in pt)"
                 />
               </div>
@@ -333,9 +335,6 @@ const Header = () => {
         </Button>
         <Button variant="ghost" size="icon" title="Export Document" onClick={handleExport}>
           <Download className="h-5 w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" title="Settings">
-          <Settings className="h-5 w-5" />
         </Button>
       </div>
     </header>
