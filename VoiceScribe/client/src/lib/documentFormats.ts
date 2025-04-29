@@ -3,10 +3,6 @@ import { DocumentFormat, ScriptElement } from "@shared/schema";
 // Format options for the dropdown
 export const formatOptions = [
   { value: 'script', label: 'Script Format' },
-  { value: 'essay', label: 'Essay Format' },
-  { value: 'novel', label: 'Novel Format' },
-  { value: 'business-letter', label: 'Business Letter' },
-  { value: 'blog-post', label: 'Blog Post' }
 ];
 
 // Voice commands for each document format

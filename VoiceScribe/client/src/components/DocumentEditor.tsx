@@ -158,10 +158,20 @@ const DocumentEditor = () => {
   // Clear interim text when recording stops
   useEffect(() => {
     if (!isRecording && interimText) {
-      console.log("Recording stopped, clearing interim text");
+      console.log("Recording stopped, finalizing interim text");
+      const newElements = [...documentContent.elements];
+      const lastElement = newElements[newElements.length - 1];
+
+      if (lastElement && lastElement.type === 'action') {
+        lastElement.content += ' ' + interimText;
+      } else {
+        newElements.push({ type: 'action' as const, content: interimText });
+      }
+
+      setDocumentContent({ elements: newElements });
       setInterimText(null);
     }
-  }, [isRecording, interimText, setInterimText]);
+  }, [isRecording, interimText, documentContent.elements, setDocumentContent, setInterimText]);
 
   // Handle export to PDF
   const handleExport = () => {
