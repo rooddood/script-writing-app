@@ -9,10 +9,15 @@ import {
 } from 'lucide-react';
 import { ScriptElement, DocumentContent } from '@shared/schema';
 import BasicSpeech from '@/lib/basicSpeech';
+import { pipeline } from '@xenova/transformers'; // Import pipeline from @xenova/transformers
 import './DocumentEditor.css';
+import axios from 'axios'; // Add axios for API requests
 
 // Create a singleton instance of our speech recognition
 const speechRecognizer = new BasicSpeech();
+
+// Configuration to switch between local LLM and OpenAI
+const USE_LOCAL_LLM = true; // Set to true to use the local model exclusively
 
 const DocumentEditor = () => {
   const { 
@@ -46,6 +51,47 @@ const DocumentEditor = () => {
     underline: false,
     align: 'left'
   });
+
+  const [modelPipeline, setModelPipeline] = useState<any>(null); // State to store the loaded model pipeline
+  const [loadingModel, setLoadingModel] = useState(false); // State to track model loading
+
+  // Load the Hugging Face model in the browser
+  useEffect(() => {
+    const loadModel = async () => {
+      setLoadingModel(true);
+      console.log("Loading Hugging Face model...");
+      try {
+        const pipelineInstance = await pipeline('text-generation', 'gpt2'); // Replace 'gpt2' with your model
+        setModelPipeline(pipelineInstance);
+        console.log("Model loaded successfully!");
+      } catch (error) {
+        console.error("Error loading model:", error);
+      } finally {
+        setLoadingModel(false);
+      }
+    };
+
+    loadModel();
+  }, []);
+
+  // Function to generate text using the loaded model
+  const generateText = async (prompt: string) => {
+    if (!modelPipeline) {
+      console.error("Model is not loaded yet."); // Debugging: Log the error
+      alert("The model is still loading. Please wait until the model is ready."); // Provide user feedback
+      return;
+    }
+
+    console.log("Generating text with prompt:", prompt);
+    try {
+      const output = await modelPipeline(prompt, { max_length: 512 });
+      console.log("Generated text:", output);
+      const newElements = [...documentContent.elements, { type: 'action', content: output[0]?.generated_text || "No response" }];
+      setDocumentContent({ elements: newElements });
+    } catch (error) {
+      console.error("Error generating text:", error);
+    }
+  };
 
   // Ensure microphone starts off
   useEffect(() => {
@@ -130,6 +176,148 @@ const DocumentEditor = () => {
     setIsRecording(newState);
   };
 
+  // Function to send commands to the LLM (local or OpenAI based on configuration)
+  const sendCommandToLLM = async (command: string) => {
+    console.log("Sending command to LLM:", command); // Debugging: Log the command being sent
+    if (USE_LOCAL_LLM) {
+      console.log("Using local LLM exclusively.");
+      await sendCommandToLocalLLM(command);
+    } else {
+      console.log("Using OpenAI as fallback.");
+      await sendCommandToOpenAI(command);
+    }
+  };
+
+  // Function to send commands to the local LLM API
+  const sendCommandToLocalLLM = async (command: string) => {
+    console.log("Preparing to send command to local LLM API...");
+    console.log("Command Payload:", { command }); // Debugging: Log the payload being sent
+  
+    try {
+      const response = await axios.post('http://localhost:5000/process-command', { command }, {
+        timeout: 5000, // Set a timeout to detect unresponsive API
+      });
+      console.log("Raw API Response from local LLM:", response); // Debugging: Log the raw API response
+      console.log("Response Headers:", response.headers); // Debugging: Log response headers
+      const { result } = response.data;
+      console.log("Parsed LLM Response:", result); // Debugging: Log the parsed LLM response
+      if (!result) {
+        console.warn("Local LLM Response is undefined or empty."); // Debugging: Warn if the response is undefined
+        throw new Error("No response from local LLM");
+      }
+      // Handle the response (e.g., update the document content)
+      const newElements = [...documentContent.elements, { type: 'action', content: result }];
+      setDocumentContent({ elements: newElements });
+    } catch (error) {
+      console.error("Error communicating with local LLM API:", error.message); // Debugging: Log the error message
+  
+      // Log additional error details
+      if (error.response) {
+        console.error("Local LLM API Error Details:", {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: error.response.headers,
+        }); // Debugging: Log detailed error response
+      } else if (error.request) {
+        console.error("No response received from local LLM API. Possible connection issue.");
+        console.error("Request Details:", error.request); // Debugging: Log the request details
+      } else {
+        console.error("Unexpected error:", error); // Debugging: Log unexpected errors
+      }
+  
+      // Log the full stack trace for debugging
+      console.error("Error Stack Trace:", error.stack);
+  
+      // Additional debugging: Check network connectivity
+      try {
+        const connectivityCheck = await axios.get('http://localhost:5000/health-check');
+        console.log("Local LLM API Health Check Response:", connectivityCheck.data); // Debugging: Log health check response
+      } catch (connectivityError) {
+        console.error("Failed to connect to local LLM API during health check:", connectivityError.message);
+      }
+    }
+  };
+
+  // Function to send commands to the OpenAI API (using Chat Completions)
+  const sendCommandToOpenAI = async (command: string) => {
+    console.log("Sending command to OpenAI API (Chat):", command); // Debugging: Log the command being sent
+    try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions', // Changed endpoint
+      {
+      model: 'gpt-3.5-turbo', // Or another suitable chat model
+      messages: [{ role: 'user', content: command }], // Format for chat API
+      max_tokens: 512,
+      temperature: 0.7,
+      },
+      {
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      }
+    );
+    console.log("Raw OpenAI API Response (Chat):", response); // Debugging: Log the raw API response
+    const result = response.data.choices[0]?.message?.content?.trim(); // Different response structure
+    console.log("Parsed OpenAI Response (Chat):", result); // Debugging: Log the parsed OpenAI response
+    if (!result) {
+      console.warn("OpenAI Chat Response is undefined or empty."); // Debugging: Warn if the response is undefined
+    }
+    // Handle the response (e.g., update the document content)
+    const newElements = [...documentContent.elements, { type: 'action', content: result || "No response from OpenAI" }];
+    setDocumentContent({ elements: newElements });
+    } catch (error) {
+    console.error("Error communicating with OpenAI Chat API:", error.response?.data || error.message); // Debugging: Log detailed error
+    if (error.response) {
+      console.error("OpenAI Chat API Error Details:", {
+      status: error.response.status,
+      statusText: error.response.statusText,
+      data: error.response.data,
+      });
+    }
+    }
+  };
+
+  // Example usage: Call this function when a specific command is triggered
+  const handleCustomCommand = () => {
+    const command = `
+    Can you create a quick, formatted basic scene for a movie script? 
+    Include all the typical elements such as:
+    - A scene heading (e.g., INT. LIVING ROOM - DAY)
+    - Action descriptions
+    - Character names
+    - Dialogue
+    - Parentheticals (if necessary)
+    - Transitions (if applicable)
+    
+    Please ensure the scene is formatted correctly and adheres to standard scriptwriting conventions.
+    `;
+    console.log("Triggering custom command:", command); // Debugging: Log the custom command trigger
+    generateText(command);
+  };
+
+  // Predefined scriptwriting prompt
+  const scriptwritingPrompt = `
+You are an expert scriptwriter and assistant. Your task is to transform the following transcription into a professionally formatted script.
+Follow standard scriptwriting conventions, ensuring the output includes the following elements:
+- **Scene Headings**: Clearly indicate the location and time of day (e.g., INT. LIVING ROOM - DAY).
+- **Action Descriptions**: Describe what is happening in the scene in present tense.
+- **Character Names**: Clearly identify the speaker before each line of dialogue.
+- **Dialogue**: Format spoken lines under the character's name, ensuring clarity and brevity.
+- **Parentheticals**: Include brief instructions for how dialogue is delivered (e.g., angrily, softly) if necessary.
+- **Transitions**: Add transitions like FADE IN, FADE OUT, or CUT TO where appropriate.
+
+Ensure the script is engaging, clear, and adheres to professional standards. Add any missing details, such as character names, scene descriptions, or formatting, to enhance readability and storytelling.
+Here is the transcription to format into a script:
+`;
+
+  // Function to handle the scriptwriting prompt
+  const handleScriptwritingPrompt = () => {
+    console.log("Triggering scriptwriting prompt"); // Debugging: Log the prompt trigger
+    sendCommandToLLM(scriptwritingPrompt);
+  };
+
   // Helper to render script elements
   const renderScriptElement = (element: ScriptElement, index: number) => {
     return (
@@ -185,8 +373,12 @@ const DocumentEditor = () => {
     a.href = url;
     a.download = 'script.txt';
     document.body.appendChild(a);
+
+    // Ensure the node is still a child before removing it
     a.click();
-    document.body.removeChild(a);
+    if (document.body.contains(a)) {
+      document.body.removeChild(a);
+    }
     URL.revokeObjectURL(url);
   };
 
@@ -264,6 +456,9 @@ const DocumentEditor = () => {
 
   return (
     <div className="document-editor h-screen flex flex-col overflow-hidden">
+      {/* Show loading state while the model is being loaded */}
+      {loadingModel && <div className="loading-indicator">Loading model, please wait...</div>}
+
       {/* Document Content Area */}
       <div 
         className="content-area flex-1 overflow-y-auto" 
@@ -352,6 +547,24 @@ const DocumentEditor = () => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Add a button to trigger the custom command for testing */}
+      <div className="fixed bottom-20 right-4 flex flex-col gap-2">
+        <Button 
+          onClick={handleCustomCommand} 
+          className={`test-command-button bg-blue-500 hover:bg-blue-600 text-white`}
+          disabled={loadingModel} // Disable button while model is loading
+        >
+          {loadingModel ? "Loading Model..." : "Test LLM Command"}
+        </Button>
+        <Button 
+          onClick={handleScriptwritingPrompt} 
+          className="scriptwriting-prompt-button bg-green-500 hover:bg-green-600 text-white"
+          disabled={loadingModel} // Disable button while model is loading
+        >
+          {loadingModel ? "Loading Model..." : "Script Formatting Prompt"}
+        </Button>
       </div>
     </div>
   );
