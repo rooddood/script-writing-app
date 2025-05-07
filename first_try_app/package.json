@@ -8,7 +8,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "node server/index.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build-and-start": "npm run build && npm start"
   },
   "dependencies": {
     "react": "^18.0.0",

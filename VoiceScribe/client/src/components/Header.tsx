@@ -115,7 +115,7 @@ const Header = () => {
     <header className="bg-neutral-900 border-b border-neutral-700 shadow-sm px-4 py-2 flex items-center justify-between sticky top-0 z-10 text-white">
       <div className="flex items-center space-x-4">
         <div className="flex items-center">
-          <img src="/favicon.ico" alt="VoiceScribe Logo" className="h-6 w-6" /> {/* Use public folder favicon */}
+          {/* <img src="/voicescribe_logo.png" alt="VoiceScribe Logo" className="h-6 w-6" /> Use public folder favicon */}
           <h1 className="text-xl font-medium text-neutral-300 ml-1">VoiceScribe</h1>
         </div>
       </div>

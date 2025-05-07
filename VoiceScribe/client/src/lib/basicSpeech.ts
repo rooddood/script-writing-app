@@ -106,25 +106,38 @@ export default class BasicSpeech {
     callback(this.isListening);
   }
   
-  // Start listening for speech
-  public start() {
-    if (this.isListening) {
-      console.log("Already listening");
-      return;
-    }
-    
-    if (!this.recognition) {
-      console.error("Speech recognition not initialized");
-      return;
-    }
-    
+  // Simplified microphone permission request function
+  public async requestMicrophonePermission() {
     try {
-      console.log("Starting speech recognition");
-      this.recognition.start();
-      this.isListening = true;
-      this.stateChange(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("Microphone permissions granted.");
+      return stream;
     } catch (error) {
-      console.error("Failed to start speech recognition:", error);
+      console.error("Microphone permission request failed:", error);
+      throw error;
+    }
+  }
+
+  // Call the permission request method before starting speech recognition
+  public async start() {
+    if (this.isListening) {
+        console.log("Already listening");
+        return;
+    }
+
+    if (!this.recognition) {
+        console.error("Speech recognition not initialized");
+        return;
+    }
+
+    try {
+        await this.requestMicrophonePermission(); // Ensure permissions are requested
+        console.log("Starting speech recognition");
+        this.recognition.start();
+        this.isListening = true;
+        this.stateChange(true);
+    } catch (error) {
+        console.error("Failed to start speech recognition:", error);
     }
   }
   

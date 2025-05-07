@@ -3,6 +3,64 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDocumentSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import { Router } from 'express';
+import { spawn } from 'child_process';
+
+const router = Router();
+
+router.post('/mcp', (req, res) => {
+  const { command, args } = req.body;
+
+  const subprocess = spawn('python', ['-m', 'pip', 'install', '-r', '/Users/kylerood/Documents/GitHub/script-writing-app/requirements.txt']);
+
+  subprocess.on('close', (code) => {
+    if (code !== 0) {
+      console.error(`Failed to install requirements. Process exited with code ${code}`);
+      return res.status(500).json({ error: 'Failed to install requirements' });
+    }
+
+    const mcpSubprocess = spawn('python', ['/Users/kylerood/Documents/GitHub/Office-Word-MCP-Server/word_mcp_server.py']);
+
+    mcpSubprocess.stdin.write(
+      JSON.stringify({ command, args }) + '\n'
+    );
+    mcpSubprocess.stdin.end();
+
+    let responseData = '';
+    let errorOccurred = false;
+
+    mcpSubprocess.stdout.on('data', (data) => {
+      responseData += data.toString();
+    });
+
+    mcpSubprocess.stdout.on('end', () => {
+      if (!errorOccurred) {
+        try {
+          const response = JSON.parse(responseData);
+          res.json(response);
+        } catch (error) {
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to parse MCP server response' });
+          }
+        }
+      }
+    });
+
+    mcpSubprocess.stderr.on('data', (data) => {
+      console.error('MCP server error:', data.toString());
+      errorOccurred = true;
+      if (!res.headersSent) {
+        res.status(500).json({ error: data.toString() });
+      }
+    });
+
+    mcpSubprocess.on('close', (code) => {
+      if (code !== 0 && !errorOccurred && !res.headersSent) {
+        res.status(500).json({ error: `MCP server process exited with code ${code}` });
+      }
+    });
+  });
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Documents API routes
@@ -91,6 +149,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to delete document" });
     }
   });
+
+  app.use('/api', router);
 
   const httpServer = createServer(app);
   return httpServer;
